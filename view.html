@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Josh's Day — Snapshot</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Source+Sans+3:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#16181a;color:#ece7df;font:16px/1.45 'Source Sans 3',system-ui,sans-serif}
+a{color:#e2775b}a:hover{color:#ece7df}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:#9b968d;margin-bottom:14px}
+h1{font:700 44px/1 'Barlow Condensed',sans-serif}
+h2{font:700 24px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;margin:30px 0 10px;padding-bottom:8px;border-bottom:3px solid #ece7df}
+.prog{display:flex;align-items:center;gap:12px;margin:18px 0 0;font-size:13px;color:#9b968d}
+.bar{flex:1;height:6px;border-radius:3px;background:#2d3134;overflow:hidden}.bar>i{display:block;height:100%;background:#e2775b}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:12px;min-height:50px;padding:10px 14px;background:#1e2123;border:1px solid #2d3134;border-radius:10px}
+.box{width:24px;height:24px;flex:none;border-radius:6px;border:2px solid #4a4f53;display:grid;place-items:center;color:#16181a;font-size:14px;font-weight:800}
+.done .box{background:#e2775b;border-color:#e2775b}
+.done .t{color:#9b968d;text-decoration:line-through}
+.lb{display:block;font:700 12px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#e2775b}
+.state{color:#9b968d;text-align:center;padding:60px 16px}
+.foot{margin-top:24px;display:flex;justify-content:center}
+button{font:inherit;background:#1e2123;color:#ece7df;border:1px solid #2d3134;border-radius:8px;min-height:44px;padding:0 16px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap"><div id="app" class="state">Loading…</div></div>
+<script>
+(function(){
+const $=document.getElementById('app');
+const gid=(new URLSearchParams(location.search).get('g')||'').trim();
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const dayKey=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const weekKey=d=>{const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return dayKey(x);};
+const monthKey=d=>d.getFullYear()+'-'+pad(d.getMonth()+1);
+const per=g=>(g==='mon'||g==='fri')?weekKey:g==='month'?monthKey:dayKey;
+const G=[['daily','Every day, in order'],['mon','Monday'],['fri','Friday'],['month','Once a month'],['camp','During summer camp']];
+function render(d,at){
+  const now=new Date(),ck=d.checks||{};
+  const items=(d.items||[]).filter(i=>!i.deletedAt).sort((a,b)=>(a.order||0)-(b.order||0));
+  const campOn=!!(ck.setting_camp&&ck.setting_camp.done);
+  const done=i=>{const c=ck[i.id];if(!c||!c.done||!c.at)return false;const g=i.group||'daily',a=new Date(c.at);if(g!=='mon'&&g!=='fri'&&g!=='month')return dayKey(a)===dayKey(now);if(i.days&&i.days.length)return weekKey(a)===weekKey(now)&&i.days.includes(a.getDay());if(i.dom||(i.nth&&i.nth.length===2))return dayKey(a)===dayKey(now);return monthKey(a)===monthKey(now);};
+  const daily=items.filter(i=>(i.group||'daily')==='daily');
+  const n=daily.filter(done).length;
+  let h='<div class="top"><span>'+now.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})+'</span><span>Read-only · updated '+new Date(at).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+'</span></div>';
+  h+='<h1>'+esc(d.title||"Josh's Day")+'</h1>';
+  if(daily.length)h+='<div class="prog"><div class="bar"><i style="width:'+(n/daily.length*100)+'%"></i></div><span>'+n+' of '+daily.length+' daily done</span></div>';
+  G.forEach(([k,label])=>{
+    if(k==='camp'&&!campOn)return;
+    const list=items.filter(i=>(i.group||'daily')===k);if(!list.length)return;
+    if(k==='daily'||k==='camp'||k==='mon')h+='<h2>'+(k==='mon'?'Set days':label)+'</h2>';
+    h+='<div class="list">'+list.map((i,x)=>{const dn=done(i);const lb=k==='daily'?'':'<span class="lb">'+esc(i.label||label)+'</span>';return '<div class="row'+(dn?' done':'')+'"><span class="box">'+(dn?'✓':'')+'</span><span>'+lb+'<span class="t">'+(k==='daily'?(x+1)+'. ':'')+esc(i.text)+'</span></span></div>';}).join('')+'</div>';
+    if(k==='mon'||k==='fri')h+='<div style="height:8px"></div>';
+  });
+  h+='<div class="foot"><button onclick="location.reload()">↻ Refresh</button></div>';
+  $.className='';$.innerHTML=h;
+}
+async function load(){
+  if(!gid){$.textContent='This link is missing its ID. Copy a fresh link from the app (Cloud sync → Live snapshot link).';return;}
+  try{
+    const r=await fetch('https://api.github.com/gists/'+encodeURIComponent(gid),{headers:{Accept:'application/vnd.github+json'}});
+    if(r.status===404)throw new Error('Checklist not found — the link may be wrong.');
+    if(r.status===403||r.status===429)throw new Error('Too many refreshes — wait a minute and try again.');
+    if(!r.ok)throw new Error('Could not load ('+r.status+').');
+    const j=await r.json();const f=j.files&&j.files['jdc-data.json'];
+    if(!f)throw new Error('Nothing published yet.');
+    const txt=f.truncated?await(await fetch(f.raw_url)).text():f.content;
+    render(JSON.parse(txt),j.updated_at);
+  }catch(e){$.className='state';$.innerHTML=esc(e.message)+'<div class="foot"><button onclick="location.reload()">↻ Try again</button></div>';}
+}
+load();setInterval(load,5*60*1000);
+})();
+</script>
+</body>
+</html>
